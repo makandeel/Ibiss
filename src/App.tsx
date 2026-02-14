@@ -56,7 +56,9 @@ interface ShiftDiffRow {
   item: string;
   title: string;
   issueType: string;
-  changeType: 'added' | 'removed' | 'qty_increased' | 'qty_decreased' | 'status_changed';
+  startIssueType: string;
+  endIssueType: string;
+  changeType: 'added' | 'removed' | 'qty_increased' | 'qty_decreased' | 'status_changed' | 'type_changed';
   startQty: number;
   endQty: number;
   qtyDelta: number;
@@ -82,8 +84,8 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [language, setLanguage] = useState<'en' | 'ar'>('ar');
-  const [darkMode, setDarkMode] = useState(false);
+  const [language, setLanguage] = useState<'en' | 'ar'>(() => (localStorage.getItem('iss-language') === 'en' ? 'en' : 'ar'));
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('iss-dark-mode') === '1');
   const [settings, setSettings] = useState<DashboardSettings>({ fcReceiveAgeThreshold: 10, fcActionableAgeThreshold: 10, mfiAgeThreshold: 5 });
   const [startShiftData, setStartShiftData] = useState<DataRow[]>([]);
   const [endShiftData, setEndShiftData] = useState<DataRow[]>([]);
@@ -117,6 +119,25 @@ export default function App() {
       category: 'Category', pendingReason: 'Pending Reason', issueType: 'Issue Type', typeBreakdown: 'Type Breakdown',
       startShift: 'Start Shift', endShift: 'End Shift',
       compareNow: 'Compare',
+      appTitle: 'ISS Dashboard',
+      uploadStart: 'Upload your CSV or Excel file to get instant insights',
+      uploadDrop: 'Drop your file here',
+      uploadDrag: 'Drag & drop your file',
+      uploadBrowse: 'or click to browse from your computer',
+      analyzing: 'Analyzing your data...',
+      uploadStartFile: 'Upload Start File',
+      uploadEndFile: 'Upload End File',
+      compareSummary: 'Comparison by Type',
+      transitionSummary: 'Type Transitions',
+      added: 'Added',
+      removed: 'Removed',
+      qtyIncreased: 'Qty Increased',
+      qtyDecreased: 'Qty Decreased',
+      statusChanged: 'Status Changed',
+      typeChanged: 'Type Changed',
+      fromType: 'From Type',
+      toType: 'To Type',
+      noTransitions: 'No type transitions found',
       overDays: (days: number) => `>${days} days`
     },
     ar: {
@@ -128,6 +149,25 @@ export default function App() {
       category: 'الفئة', pendingReason: 'سبب التعليق', issueType: 'نوع الحالة', typeBreakdown: 'توزيع الأنواع',
       startShift: 'بداية الشيفت', endShift: 'نهاية الشيفت',
       compareNow: 'قارن الآن',
+      appTitle: 'ISS Dashboard',
+      uploadStart: 'ارفع ملف CSV أو Excel لعرض التحليل فورًا',
+      uploadDrop: 'اسحب الملف هنا',
+      uploadDrag: 'اسحب الملف وأفلته',
+      uploadBrowse: 'أو اضغط للاختيار من جهازك',
+      analyzing: 'جارٍ تحليل البيانات...',
+      uploadStartFile: 'ارفع ملف البداية',
+      uploadEndFile: 'ارفع ملف النهاية',
+      compareSummary: 'ملخص المقارنة حسب النوع',
+      transitionSummary: 'التحويلات بين الأنواع',
+      added: 'جديد',
+      removed: 'مزال',
+      qtyIncreased: 'زيادة كمية',
+      qtyDecreased: 'نقص كمية',
+      statusChanged: 'تغيير حالة',
+      typeChanged: 'تغيير نوع',
+      fromType: 'من نوع',
+      toType: 'إلى نوع',
+      noTransitions: 'لا يوجد تحويلات بين الأنواع',
       overDays: (days: number) => `أكثر من ${days} أيام`
     }
   } as const;
@@ -137,6 +177,28 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
+
+  useEffect(() => {
+    localStorage.setItem('iss-language', language);
+  }, [language]);
+
+  useEffect(() => {
+    localStorage.setItem('iss-dark-mode', darkMode ? '1' : '0');
+  }, [darkMode]);
+
+
+
+  const getChangeTypeLabel = useCallback((changeType: ShiftDiffRow['changeType']) => {
+    switch (changeType) {
+      case 'added': return t.added;
+      case 'removed': return t.removed;
+      case 'qty_increased': return t.qtyIncreased;
+      case 'qty_decreased': return t.qtyDecreased;
+      case 'status_changed': return t.statusChanged;
+      case 'type_changed': return t.typeChanged;
+      default: return changeType;
+    }
+  }, [t]);
 
   const getRowCategory = useCallback((row: DataRow) => {
     const title = String(row['Title'] || '').toLowerCase();
@@ -262,13 +324,13 @@ export default function App() {
         setIsLoading(false);
         setActiveTab('dashboard');
       } catch {
-        alert('Error parsing file. Please check the file format.');
+        alert(language === 'ar' ? 'حصل خطأ في قراءة الملف. تأكد من تنسيق الملف.' : 'Error parsing file. Please check the file format.');
         setIsLoading(false);
       }
     };
     if (file.name.endsWith('.csv')) reader.readAsText(file);
     else reader.readAsBinaryString(file);
-  }, [calculateMetrics]);
+  }, [calculateMetrics, language]);
 
   const parseAnyFile = useCallback(async (file: File): Promise<DataRow[]> => {
     const content = await new Promise<string>((resolve, reject) => {
@@ -311,11 +373,14 @@ export default function App() {
       const end = endMap.get(key);
 
       if (!start && end) {
+        const endType = getRowCategory(end);
         diffs.push({
           key,
           item: String(end['Item'] || ''),
           title: String(end['Title'] || ''),
-          issueType: getRowCategory(end),
+          issueType: endType,
+          startIssueType: '-',
+          endIssueType: endType,
           changeType: 'added',
           startQty: 0,
           endQty: Number(end['Quantity']) || 0,
@@ -327,11 +392,14 @@ export default function App() {
       }
 
       if (start && !end) {
+        const startType = getRowCategory(start);
         diffs.push({
           key,
           item: String(start['Item'] || ''),
           title: String(start['Title'] || ''),
-          issueType: getRowCategory(start),
+          issueType: startType,
+          startIssueType: startType,
+          endIssueType: '-',
           changeType: 'removed',
           startQty: Number(start['Quantity']) || 0,
           endQty: 0,
@@ -348,13 +416,17 @@ export default function App() {
       const endQty = Number(end['Quantity']) || 0;
       const startStatus = String(start['Status'] || '');
       const endStatus = String(end['Status'] || '');
+      const startType = getRowCategory(start);
+      const endType = getRowCategory(end);
 
       if (endQty > startQty) {
         diffs.push({
           key,
           item: String(end['Item'] || ''),
           title: String(end['Title'] || ''),
-          issueType: getRowCategory(end),
+          issueType: endType,
+          startIssueType: startType,
+          endIssueType: endType,
           changeType: 'qty_increased',
           startQty,
           endQty,
@@ -367,7 +439,9 @@ export default function App() {
           key,
           item: String(end['Item'] || ''),
           title: String(end['Title'] || ''),
-          issueType: getRowCategory(end),
+          issueType: endType,
+          startIssueType: startType,
+          endIssueType: endType,
           changeType: 'qty_decreased',
           startQty,
           endQty,
@@ -382,8 +456,27 @@ export default function App() {
           key: `${key}__status`,
           item: String(end['Item'] || ''),
           title: String(end['Title'] || ''),
-          issueType: getRowCategory(end),
+          issueType: endType,
+          startIssueType: startType,
+          endIssueType: endType,
           changeType: 'status_changed',
+          startQty,
+          endQty,
+          qtyDelta: endQty - startQty,
+          startStatus,
+          endStatus,
+        });
+      }
+
+      if (startType !== endType) {
+        diffs.push({
+          key: `${key}__type`,
+          item: String(end['Item'] || ''),
+          title: String(end['Title'] || ''),
+          issueType: endType,
+          startIssueType: startType,
+          endIssueType: endType,
+          changeType: 'type_changed',
           startQty,
           endQty,
           qtyDelta: endQty - startQty,
@@ -398,7 +491,7 @@ export default function App() {
 
   const handleShiftFileInput = useCallback(async (file: File, which: 'start' | 'end') => {
     if (!(file.name.endsWith('.csv') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
-      alert('Please upload a CSV or Excel file');
+      alert(language === 'ar' ? 'من فضلك ارفع ملف CSV أو Excel' : 'Please upload a CSV or Excel file');
       return;
     }
     const parsed = await parseAnyFile(file);
@@ -409,7 +502,7 @@ export default function App() {
       setEndShiftData(parsed);
       setEndShiftFileName(file.name);
     }
-  }, [parseAnyFile]);
+  }, [parseAnyFile, language]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -420,15 +513,15 @@ export default function App() {
       if (file.name.endsWith('.csv') || file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
         parseFile(file);
       } else {
-        alert('Please upload a CSV or Excel file');
+        alert(language === 'ar' ? 'من فضلك ارفع ملف CSV أو Excel' : 'Please upload a CSV or Excel file');
       }
     }
-  }, [parseFile]);
+  }, [parseFile, language]);
 
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) parseFile(files[0]);
-  }, [parseFile]);
+  }, [parseFile, language]);
 
   const clearData = () => {
     setData([]);
@@ -474,6 +567,39 @@ export default function App() {
     });
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [filteredDataWithType]);
+
+  const shiftTypeSummary = useMemo(() => {
+    const map: Record<string, { added: number; removed: number; qtyIncreased: number; qtyDecreased: number; statusChanged: number; typeChanged: number }> = {};
+    const init = () => ({ added: 0, removed: 0, qtyIncreased: 0, qtyDecreased: 0, statusChanged: 0, typeChanged: 0 });
+
+    shiftDiffRows.forEach((row) => {
+      const key = row.endIssueType !== '-' ? row.endIssueType : row.startIssueType;
+      if (!map[key]) map[key] = init();
+      if (row.changeType === 'added') map[key].added += 1;
+      if (row.changeType === 'removed') map[key].removed += 1;
+      if (row.changeType === 'qty_increased') map[key].qtyIncreased += 1;
+      if (row.changeType === 'qty_decreased') map[key].qtyDecreased += 1;
+      if (row.changeType === 'status_changed') map[key].statusChanged += 1;
+      if (row.changeType === 'type_changed') map[key].typeChanged += 1;
+    });
+
+    return Object.entries(map).sort((a, b) => {
+      const aTotal = Object.values(a[1]).reduce((s, v) => s + v, 0);
+      const bTotal = Object.values(b[1]).reduce((s, v) => s + v, 0);
+      return bTotal - aTotal;
+    });
+  }, [shiftDiffRows]);
+
+  const typeTransitions = useMemo(() => {
+    const map: Record<string, number> = {};
+    shiftDiffRows
+      .filter((r) => r.changeType === 'type_changed')
+      .forEach((r) => {
+        const key = `${r.startIssueType} -> ${r.endIssueType}`;
+        map[key] = (map[key] || 0) + 1;
+      });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [shiftDiffRows]);
 
   // Chart data
   const chartData = useMemo(() => {
@@ -632,28 +758,28 @@ export default function App() {
   // Upload screen
   if (data.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center p-4">
         <div className="w-full max-w-2xl">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600 rounded-2xl mb-6 shadow-lg shadow-blue-200">
               <FileSpreadsheet className="w-10 h-10 text-white" />
             </div>
-            <h1 className="text-4xl font-bold text-slate-900 mb-3">ISS Dashboard</h1>
-            <p className="text-lg text-slate-600">Upload your CSV or Excel file to get instant insights</p>
+            <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-3">{t.appTitle}</h1>
+            <p className="text-lg text-slate-600 dark:text-slate-300">{t.uploadStart}</p>
           </div>
           <div
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
-            className={`relative border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 ${isDragging ? 'border-blue-500 bg-blue-50 shadow-lg shadow-blue-100' : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-slate-50'}`}
+            className={`relative border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 ${isDragging ? 'border-blue-500 bg-blue-50 shadow-lg shadow-blue-100' : 'border-slate-300 bg-white dark:bg-slate-900 dark:border-slate-700 hover:border-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
           >
             <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileInput} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
             <div className="flex flex-col items-center">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-colors ${isDragging ? 'bg-blue-100' : 'bg-slate-100'}`}>
                 <Upload className={`w-8 h-8 ${isDragging ? 'text-blue-600' : 'text-slate-500'}`} />
               </div>
-              <h3 className="text-xl font-semibold text-slate-900 mb-2">{isDragging ? 'Drop your file here' : 'Drag & drop your file'}</h3>
-              <p className="text-slate-500 mb-4">or click to browse from your computer</p>
+              <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">{isDragging ? t.uploadDrop : t.uploadDrag}</h3>
+              <p className="text-slate-500 dark:text-slate-400 mb-4">{t.uploadBrowse}</p>
               <div className="flex gap-2">
                 <Badge variant="secondary" className="text-xs">CSV</Badge>
                 <Badge variant="secondary" className="text-xs">Excel</Badge>
@@ -663,7 +789,7 @@ export default function App() {
           {isLoading && (
             <div className="mt-8 text-center">
               <Progress className="w-full mb-3" />
-              <p className="text-slate-600">Analyzing your data...</p>
+              <p className="text-slate-600 dark:text-slate-300">{t.analyzing}</p>
             </div>
           )}
         </div>
@@ -674,7 +800,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+      <header className="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
@@ -682,8 +808,8 @@ export default function App() {
                 <FileSpreadsheet className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-lg font-semibold text-slate-900">ISS Dashboard</h1>
-                <p className="text-xs text-slate-500">{fileName} - {data.length} records</p>
+                <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{t.appTitle}</h1>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{fileName} - {data.length} {t.rows}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -701,7 +827,7 @@ export default function App() {
                 <Download className="w-3.5 h-3.5" /> Excel
               </Button>
               <Button variant="outline" size="sm" onClick={clearData} className="gap-1.5 text-xs">
-                <X className="w-3.5 h-3.5" /> Clear
+                <X className="w-3.5 h-3.5" /> {t.clear}
               </Button>
               <label className="cursor-pointer">
                 <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileInput} className="hidden" />
@@ -1076,7 +1202,7 @@ export default function App() {
                         const f = e.target.files?.[0];
                         if (f) handleShiftFileInput(f, 'start');
                       }} />
-                      <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild><span><Upload className="w-3.5 h-3.5" /> {startShiftFileName || 'Upload Start File'}</span></Button>
+                      <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild><span><Upload className="w-3.5 h-3.5" /> {startShiftFileName || t.uploadStartFile}</span></Button>
                     </label>
                     <p className="text-xs text-slate-500 mt-2">{startShiftData.length} rows</p>
                   </div>
@@ -1087,7 +1213,7 @@ export default function App() {
                         const f = e.target.files?.[0];
                         if (f) handleShiftFileInput(f, 'end');
                       }} />
-                      <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild><span><Upload className="w-3.5 h-3.5" /> {endShiftFileName || 'Upload End File'}</span></Button>
+                      <Button variant="outline" size="sm" className="gap-1.5 text-xs" asChild><span><Upload className="w-3.5 h-3.5" /> {endShiftFileName || t.uploadEndFile}</span></Button>
                     </label>
                     <p className="text-xs text-slate-500 mt-2">{endShiftData.length} rows</p>
                   </div>
@@ -1099,21 +1225,66 @@ export default function App() {
 
                 {shiftDiffRows.length > 0 && (
                   <>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                      <Badge variant="secondary">Added: {shiftDiffRows.filter(r => r.changeType === 'added').length}</Badge>
-                      <Badge variant="secondary">Removed: {shiftDiffRows.filter(r => r.changeType === 'removed').length}</Badge>
-                      <Badge variant="secondary">Qty Increased: {shiftDiffRows.filter(r => r.changeType === 'qty_increased').length}</Badge>
-                      <Badge variant="secondary">Qty Decreased: {shiftDiffRows.filter(r => r.changeType === 'qty_decreased').length}</Badge>
-                      <Badge variant="secondary">Status Changed: {shiftDiffRows.filter(r => r.changeType === 'status_changed').length}</Badge>
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+                      <Badge variant="secondary">{t.added}: {shiftDiffRows.filter(r => r.changeType === 'added').length}</Badge>
+                      <Badge variant="secondary">{t.removed}: {shiftDiffRows.filter(r => r.changeType === 'removed').length}</Badge>
+                      <Badge variant="secondary">{t.qtyIncreased}: {shiftDiffRows.filter(r => r.changeType === 'qty_increased').length}</Badge>
+                      <Badge variant="secondary">{t.qtyDecreased}: {shiftDiffRows.filter(r => r.changeType === 'qty_decreased').length}</Badge>
+                      <Badge variant="secondary">{t.statusChanged}: {shiftDiffRows.filter(r => r.changeType === 'status_changed').length}</Badge>
+                      <Badge variant="secondary">{t.typeChanged}: {shiftDiffRows.filter(r => r.changeType === 'type_changed').length}</Badge>
+                    </div>
+
+                    <div className="rounded-lg border p-3">
+                      <p className="text-sm font-semibold mb-2">{t.compareSummary}</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-slate-50 dark:bg-slate-900">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs">{t.issueType}</th>
+                              <th className="px-3 py-2 text-left text-xs">{t.added}</th>
+                              <th className="px-3 py-2 text-left text-xs">{t.removed}</th>
+                              <th className="px-3 py-2 text-left text-xs">{t.qtyIncreased}</th>
+                              <th className="px-3 py-2 text-left text-xs">{t.qtyDecreased}</th>
+                              <th className="px-3 py-2 text-left text-xs">{t.statusChanged}</th>
+                              <th className="px-3 py-2 text-left text-xs">{t.typeChanged}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {shiftTypeSummary.map(([type, s]) => (
+                              <tr key={type} className="border-b dark:border-slate-800">
+                                <td className="px-3 py-1.5 text-xs font-medium">{type}</td>
+                                <td className="px-3 py-1.5 text-xs">{s.added}</td>
+                                <td className="px-3 py-1.5 text-xs">{s.removed}</td>
+                                <td className="px-3 py-1.5 text-xs">{s.qtyIncreased}</td>
+                                <td className="px-3 py-1.5 text-xs">{s.qtyDecreased}</td>
+                                <td className="px-3 py-1.5 text-xs">{s.statusChanged}</td>
+                                <td className="px-3 py-1.5 text-xs">{s.typeChanged}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border p-3">
+                      <p className="text-sm font-semibold mb-2">{t.transitionSummary}</p>
+                      {typeTransitions.length === 0 ? (
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{t.noTransitions}</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {typeTransitions.map(([k, v]) => <Badge key={k} variant="outline">{k}: {v}</Badge>)}
+                        </div>
+                      )}
                     </div>
 
                     <ScrollArea className="border rounded-lg" style={{ height: '420px' }}>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                          <thead className="bg-slate-50 sticky top-0 z-10">
+                          <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10">
                             <tr>
                               <th className="px-3 py-2 text-left text-xs">Type</th>
-                              <th className="px-3 py-2 text-left text-xs">IssueType</th>
+                              <th className="px-3 py-2 text-left text-xs">{t.fromType}</th>
+                              <th className="px-3 py-2 text-left text-xs">{t.toType}</th>
                               <th className="px-3 py-2 text-left text-xs">Item</th>
                               <th className="px-3 py-2 text-left text-xs">Title</th>
                               <th className="px-3 py-2 text-left text-xs">Start Qty</th>
@@ -1126,8 +1297,9 @@ export default function App() {
                           <tbody>
                             {shiftDiffRows.map((row) => (
                               <tr key={row.key} className="border-b">
-                                <td className="px-3 py-1.5 text-xs">{row.changeType}</td>
-                                <td className="px-3 py-1.5 text-xs">{row.issueType}</td>
+                                <td className="px-3 py-1.5 text-xs">{getChangeTypeLabel(row.changeType)}</td>
+                                <td className="px-3 py-1.5 text-xs">{row.startIssueType}</td>
+                                <td className="px-3 py-1.5 text-xs">{row.endIssueType}</td>
                                 <td className="px-3 py-1.5 text-xs">{row.item || '-'}</td>
                                 <td className="px-3 py-1.5 text-xs max-w-[220px] truncate">{row.title || '-'}</td>
                                 <td className="px-3 py-1.5 text-xs">{row.startQty}</td>

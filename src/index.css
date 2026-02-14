@@ -74,3 +74,14 @@
     color: hsl(var(--foreground));
   }
 }
+
+/* Improve readability for hard-coded slate utility classes in dark mode */
+.dark .text-slate-900 { color: rgb(241 245 249) !important; }
+.dark .text-slate-700 { color: rgb(226 232 240) !important; }
+.dark .text-slate-600 { color: rgb(203 213 225) !important; }
+.dark .text-slate-500 { color: rgb(148 163 184) !important; }
+.dark .text-slate-400 { color: rgb(100 116 139) !important; }
+.dark .bg-slate-50 { background-color: rgb(15 23 42) !important; }
+.dark .bg-white { background-color: rgb(15 23 42) !important; }
+.dark .border-slate-200 { border-color: rgb(51 65 85) !important; }
+.dark .border-slate-100 { border-color: rgb(51 65 85) !important; }
