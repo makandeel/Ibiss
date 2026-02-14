@@ -40,3 +40,16 @@ What this single command does:
 5. Pushes the branch back to GitHub.
 
 After that, go to GitHub and press **Merge** on the PR.
+
+
+## Vercel warnings vs errors
+
+If you see yellow lines like:
+- `npm warn deprecated glob@...`
+- `Some chunks are larger than 500 kB`
+
+These are **warnings**, not build failures. Deployment still succeeds.
+
+If the page looks unstyled (plain text/buttons), make sure Tailwind/PostCSS config files are committed:
+- `tailwind.config.js`
+- `postcss.config.js`
