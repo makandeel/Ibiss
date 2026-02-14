@@ -46,3 +46,30 @@ What this does automatically:
 ```
 
 Then on GitHub choose branch `work` from the branch dropdown.
+
+
+## If Pull Request says "Branch has merge conflicts"
+
+If GitHub shows **"Pull Request is not mergeable"**, run this helper from your project folder:
+
+```bash
+./scripts/fix-pr-merge-conflicts.sh https://github.com/USERNAME/REPO.git main work
+```
+
+What it does:
+1. Fetches latest `main` and `work` from GitHub.
+2. Checks out local `work`.
+3. Merges `origin/main` into `work` with strategy `-X ours` (keeps your `work` version on conflicting lines).
+4. Pushes updated `work` so the PR can be merged from GitHub UI.
+
+### Mobile quick steps (Termux)
+
+Run each command one-by-one:
+
+```bash
+cd ~/Ibiss
+chmod +x scripts/fix-pr-merge-conflicts.sh
+./scripts/fix-pr-merge-conflicts.sh https://github.com/USERNAME/REPO.git main work
+```
+
+Then open the PR and press **Merge**.
