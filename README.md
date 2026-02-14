@@ -64,31 +64,34 @@ What it does:
 
 ### Mobile quick steps (Termux)
 
-Run each command one-by-one:
+If your phone is clean (no git errors), run:
 
 ```bash
 cd ~/Ibiss
 git checkout work
 git pull origin work
-ls scripts
 chmod +x scripts/fix-pr-merge-conflicts.sh
 ./scripts/fix-pr-merge-conflicts.sh https://github.com/USERNAME/REPO.git main work
 ```
 
 Then open the PR and press **Merge**.
 
-### If `fix-pr-merge-conflicts.sh` is missing
+### If you see errors like:
+- `pathspec 'work' did not match any file(s) known to git`
+- `Pulling is not possible because you have unmerged files`
+- `scripts/fix-pr-merge-conflicts.sh: No such file or directory`
 
-If `ls scripts` shows only `publish-to-github.sh` and `sync-main-with-work.sh`, that means your phone still has an older branch state.
-
-Run:
+Use the recovery helper (handles all 3 cases):
 
 ```bash
 cd ~/Ibiss
-git fetch origin
-git checkout work
-git pull origin work
-ls scripts
+chmod +x scripts/recover-pr-on-mobile.sh
+./scripts/recover-pr-on-mobile.sh https://github.com/USERNAME/REPO.git main work
 ```
 
-After that you should see `fix-pr-merge-conflicts.sh` and you can continue with the merge-fix command above.
+What this recovery script does:
+1. Aborts incomplete merge/rebase/cherry-pick states.
+2. Fetches all remote branches.
+3. If `origin/work` is missing, it automatically selects the newest `origin/codex/*` branch.
+4. Merges `origin/main` into that feature branch with `-X ours`.
+5. Pushes the updated feature branch so PR becomes mergeable.
