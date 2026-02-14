@@ -138,6 +138,8 @@ export default function App() {
       fromType: 'From Type',
       toType: 'To Type',
       noTransitions: 'No type transitions found',
+      executionBy: 'Implemented by Mahmoud Kandeel',
+      supportContact: 'For any inquiry or issue, contact: mahmabdr@amazon.com',
       overDays: (days: number) => `>${days} days`
     },
     ar: {
@@ -168,6 +170,8 @@ export default function App() {
       fromType: 'من نوع',
       toType: 'إلى نوع',
       noTransitions: 'لا يوجد تحويلات بين الأنواع',
+      executionBy: 'تنفيذ Mahmoud Kandeel',
+      supportContact: 'لأي استفسار أو مشكلة تواصل مع: mahmabdr@amazon.com',
       overDays: (days: number) => `أكثر من ${days} أيام`
     }
   } as const;
@@ -1320,6 +1324,13 @@ export default function App() {
           </TabsContent>
         </Tabs>
       </main>
+
+      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <p className="text-sm text-slate-700 dark:text-slate-300">{t.executionBy}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t.supportContact}</p>
+        </div>
+      </footer>
 
       {/* Detail Dialog */}
       <Dialog open={!!selectedDataset} onOpenChange={() => setSelectedDataset(null)}>
