@@ -51,6 +51,15 @@ interface DashboardSettings {
   mfiAgeThreshold: number;
 }
 
+interface UserPreferences {
+  language: 'en' | 'ar';
+  darkMode: boolean;
+  motionEnabled: boolean;
+  density: 'cozy' | 'compact';
+  motionSpeed: number;
+  thresholds: DashboardSettings;
+}
+
 interface ShiftDiffRow {
   key: string;
   item: string;
@@ -76,17 +85,65 @@ const RBS_PSAS_ITEMS = [
 ];
 
 const CHART_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#a855f7', '#06b6d4', '#f43f5e', '#64748b'];
+const PREFS_COOKIE_KEY = 'iss-dashboard-prefs';
+const DEFAULT_THRESHOLDS: DashboardSettings = { fcReceiveAgeThreshold: 10, fcActionableAgeThreshold: 10, mfiAgeThreshold: 5 };
+
+const readPreferences = (): UserPreferences => {
+  const cookieItem = document.cookie
+    .split('; ')
+    .find((part) => part.startsWith(`${PREFS_COOKIE_KEY}=`));
+
+  if (!cookieItem) {
+    return {
+      language: localStorage.getItem('iss-language') === 'en' ? 'en' : 'ar',
+      darkMode: localStorage.getItem('iss-dark-mode') === '1',
+      motionEnabled: true,
+      density: 'cozy',
+      motionSpeed: 280,
+      thresholds: DEFAULT_THRESHOLDS,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(decodeURIComponent(cookieItem.split('=')[1]));
+    return {
+      language: parsed.language === 'en' ? 'en' : 'ar',
+      darkMode: parsed.darkMode === true,
+      motionEnabled: parsed.motionEnabled !== false,
+      density: parsed.density === 'compact' ? 'compact' : 'cozy',
+      motionSpeed: Number(parsed.motionSpeed) || 280,
+      thresholds: {
+        fcReceiveAgeThreshold: Number(parsed.thresholds?.fcReceiveAgeThreshold) || 10,
+        fcActionableAgeThreshold: Number(parsed.thresholds?.fcActionableAgeThreshold) || 10,
+        mfiAgeThreshold: Number(parsed.thresholds?.mfiAgeThreshold) || 5,
+      },
+    };
+  } catch {
+    return {
+      language: 'ar',
+      darkMode: false,
+      motionEnabled: true,
+      density: 'cozy',
+      motionSpeed: 280,
+      thresholds: DEFAULT_THRESHOLDS,
+    };
+  }
+};
 
 export default function App() {
+  const initialPreferences = useMemo(() => readPreferences(), []);
   const [data, setData] = useState<DataRow[]>([]);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [fileName, setFileName] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [language, setLanguage] = useState<'en' | 'ar'>(() => (localStorage.getItem('iss-language') === 'en' ? 'en' : 'ar'));
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('iss-dark-mode') === '1');
-  const [settings, setSettings] = useState<DashboardSettings>({ fcReceiveAgeThreshold: 10, fcActionableAgeThreshold: 10, mfiAgeThreshold: 5 });
+  const [language, setLanguage] = useState<'en' | 'ar'>(initialPreferences.language);
+  const [darkMode, setDarkMode] = useState(initialPreferences.darkMode);
+  const [motionEnabled, setMotionEnabled] = useState(initialPreferences.motionEnabled);
+  const [density, setDensity] = useState<'cozy' | 'compact'>(initialPreferences.density);
+  const [motionSpeed, setMotionSpeed] = useState(initialPreferences.motionSpeed);
+  const [settings, setSettings] = useState<DashboardSettings>(initialPreferences.thresholds);
   const [startShiftData, setStartShiftData] = useState<DataRow[]>([]);
   const [endShiftData, setEndShiftData] = useState<DataRow[]>([]);
   const [shiftDiffRows, setShiftDiffRows] = useState<ShiftDiffRow[]>([]);
@@ -116,14 +173,15 @@ export default function App() {
       filters: 'Filters', clear: 'Clear', clearAllFilters: 'Clear All Filters',
       rows: 'rows', newFile: 'New File',
       ageThreshold: 'Age threshold', language: 'Language', darkMode: 'Dark mode',
+      motion: 'Motion', density: 'Density', compact: 'Compact', cozy: 'Cozy', motionSpeed: 'Motion speed',
       category: 'Category', pendingReason: 'Pending Reason', issueType: 'Issue Type', typeBreakdown: 'Type Breakdown',
       startShift: 'Start Shift', endShift: 'End Shift',
       compareNow: 'Compare',
       appTitle: 'ISS Dashboard',
-      uploadStart: 'Upload your CSV or Excel file to get instant insights',
+      uploadStart: 'Upload CSV/Excel and start instantly',
       uploadDrop: 'Drop your file here',
       uploadDrag: 'Drag & drop your file',
-      uploadBrowse: 'or click to browse from your computer',
+      uploadBrowse: 'or click to browse',
       analyzing: 'Analyzing your data...',
       uploadStartFile: 'Upload Start File',
       uploadEndFile: 'Upload End File',
@@ -138,8 +196,8 @@ export default function App() {
       fromType: 'From Type',
       toType: 'To Type',
       noTransitions: 'No type transitions found',
-      executionBy: 'Implemented by Mahmoud Kandeel',
-      supportContact: 'For any inquiry or issue, contact: mahmabdr@amazon.com',
+      executionBy: 'Built by Mahmoud Kandeel',
+      supportContact: 'Support: mahmabdr@amazon.com',
       overDays: (days: number) => `>${days} days`
     },
     ar: {
@@ -148,14 +206,15 @@ export default function App() {
       filters: 'الفلاتر', clear: 'مسح', clearAllFilters: 'مسح كل الفلاتر',
       rows: 'صف', newFile: 'ملف جديد',
       ageThreshold: 'حد الأيام', language: 'اللغة', darkMode: 'الوضع الليلي',
+      motion: 'الحركة', density: 'الكثافة', compact: 'مضغوط', cozy: 'مريح', motionSpeed: 'سرعة الحركة',
       category: 'الفئة', pendingReason: 'سبب التعليق', issueType: 'نوع الحالة', typeBreakdown: 'توزيع الأنواع',
       startShift: 'بداية الشيفت', endShift: 'نهاية الشيفت',
       compareNow: 'قارن الآن',
       appTitle: 'ISS Dashboard',
-      uploadStart: 'ارفع ملف CSV أو Excel لعرض التحليل فورًا',
+      uploadStart: 'ارفع CSV/Excel وابدأ فورًا',
       uploadDrop: 'اسحب الملف هنا',
       uploadDrag: 'اسحب الملف وأفلته',
-      uploadBrowse: 'أو اضغط للاختيار من جهازك',
+      uploadBrowse: 'أو اضغط للاختيار',
       analyzing: 'جارٍ تحليل البيانات...',
       uploadStartFile: 'ارفع ملف البداية',
       uploadEndFile: 'ارفع ملف النهاية',
@@ -170,8 +229,8 @@ export default function App() {
       fromType: 'من نوع',
       toType: 'إلى نوع',
       noTransitions: 'لا يوجد تحويلات بين الأنواع',
-      executionBy: 'تنفيذ Mahmoud Kandeel',
-      supportContact: 'لأي استفسار أو مشكلة تواصل مع: mahmabdr@amazon.com',
+      executionBy: 'بواسطة Mahmoud Kandeel',
+      supportContact: 'الدعم: mahmabdr@amazon.com',
       overDays: (days: number) => `أكثر من ${days} أيام`
     }
   } as const;
@@ -189,6 +248,18 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('iss-dark-mode', darkMode ? '1' : '0');
   }, [darkMode]);
+
+  useEffect(() => {
+    const nextPrefs: UserPreferences = {
+      language,
+      darkMode,
+      motionEnabled,
+      density,
+      motionSpeed,
+      thresholds: settings,
+    };
+    document.cookie = `${PREFS_COOKIE_KEY}=${encodeURIComponent(JSON.stringify(nextPrefs))};path=/;max-age=${60 * 60 * 24 * 365}`;
+  }, [language, darkMode, motionEnabled, density, motionSpeed, settings]);
 
 
 
@@ -802,7 +873,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+    <div
+      className="min-h-screen bg-slate-50 dark:bg-slate-950"
+      dir={language === 'ar' ? 'rtl' : 'ltr'}
+      data-motion={motionEnabled ? 'on' : 'off'}
+      data-density={density}
+      style={{ ['--iss-motion-ms' as any]: `${motionSpeed}ms` }}
+    >
       {/* Header */}
       <header className="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -845,13 +922,14 @@ export default function App() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className={`max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 ${density === 'compact' ? 'py-4' : 'py-6'}`}>
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6">
             <TabsTrigger value="dashboard" className="gap-2"><Activity className="w-4 h-4" /> {t.dashboard}</TabsTrigger>
             <TabsTrigger value="charts" className="gap-2"><BarChart3 className="w-4 h-4" /> {t.charts}</TabsTrigger>
             <TabsTrigger value="explorer" className="gap-2"><Search className="w-4 h-4" /> {t.explorer}</TabsTrigger>
             <TabsTrigger value="reconciliation" className="gap-2"><GitCompareArrows className="w-4 h-4" /> {t.reconciliation}</TabsTrigger>
+            <TabsTrigger value="settings" className="gap-2"><Settings className="w-4 h-4" /> {t.settings}</TabsTrigger>
           </TabsList>
 
           {/* DASHBOARD TAB */}
@@ -1319,6 +1397,61 @@ export default function App() {
                     </ScrollArea>
                   </>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="settings">
+            <Card className="max-w-3xl">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2"><Settings className="w-5 h-5 text-blue-600" /> {t.settings}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-lg border p-3">
+                    <p className="text-sm font-medium mb-2">{t.motion}</p>
+                    <Button variant={motionEnabled ? 'default' : 'outline'} size="sm" onClick={() => setMotionEnabled((prev) => !prev)}>
+                      {motionEnabled ? 'ON' : 'OFF'}
+                    </Button>
+                    <p className="text-xs text-slate-500 mt-2">{t.motionSpeed}: {motionSpeed}ms</p>
+                    <input
+                      type="range"
+                      min={120}
+                      max={600}
+                      step={20}
+                      value={motionSpeed}
+                      onChange={(e) => setMotionSpeed(Number(e.target.value))}
+                      className="w-full mt-2"
+                      disabled={!motionEnabled}
+                    />
+                  </div>
+
+                  <div className="rounded-lg border p-3">
+                    <p className="text-sm font-medium mb-2">{t.density}</p>
+                    <div className="flex gap-2">
+                      <Button variant={density === 'cozy' ? 'default' : 'outline'} size="sm" onClick={() => setDensity('cozy')}>{t.cozy}</Button>
+                      <Button variant={density === 'compact' ? 'default' : 'outline'} size="sm" onClick={() => setDensity('compact')}>{t.compact}</Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border p-3">
+                  <p className="text-sm font-medium mb-3">{t.ageThreshold}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">FC Receive</label>
+                      <Input type="number" value={settings.fcReceiveAgeThreshold} onChange={e => setSettings(prev => ({ ...prev, fcReceiveAgeThreshold: Number(e.target.value) || 0 }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">FC Actionable</label>
+                      <Input type="number" value={settings.fcActionableAgeThreshold} onChange={e => setSettings(prev => ({ ...prev, fcActionableAgeThreshold: Number(e.target.value) || 0 }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">MFI</label>
+                      <Input type="number" value={settings.mfiAgeThreshold} onChange={e => setSettings(prev => ({ ...prev, mfiAgeThreshold: Number(e.target.value) || 0 }))} />
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

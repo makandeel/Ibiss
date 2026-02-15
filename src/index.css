@@ -85,3 +85,20 @@
 .dark .bg-white { background-color: rgb(15 23 42) !important; }
 .dark .border-slate-200 { border-color: rgb(51 65 85) !important; }
 .dark .border-slate-100 { border-color: rgb(51 65 85) !important; }
+
+[data-motion='on'] .transition-all,
+[data-motion='on'] .transition-colors,
+[data-motion='on'] .transition-shadow {
+  transition-duration: var(--iss-motion-ms, 280ms) !important;
+}
+
+[data-motion='off'] .transition-all,
+[data-motion='off'] .transition-colors,
+[data-motion='off'] .transition-shadow {
+  transition-duration: 0ms !important;
+}
+
+[data-density='compact'] .card,
+[data-density='compact'] .rounded-lg.border {
+  border-radius: 0.6rem;
+}
