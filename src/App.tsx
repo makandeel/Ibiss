@@ -941,52 +941,52 @@ export default function App() {
 
           {/* DASHBOARD TAB */}
           <TabsContent value="dashboard">
-            <h3 className="text-sm font-semibold mb-3 text-emerald-700 dark:text-emerald-300">ISS Overview</h3>
+            <h3 className="text-xl font-bold mb-4 text-emerald-700 dark:text-emerald-300">ISS Overview</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
               <Card className="border-l-4 border-l-blue-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => { const nonCret = data.filter(row => { const t = String(row['Title'] || '').toLowerCase(); const i = String(row['Item'] || '').toLowerCase(); const l = String(row['PhysicalLocation'] || '').toLowerCase(); return !(t.includes('cret') || i.includes('c-return') || i.includes('customer return') || l.includes('tscret'));}); openDataset('Total Issues (Non-CRET)', nonCret, 'All non-CRET issues'); }}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500">Total Issues</CardTitle></CardHeader>
-                <CardContent><div className="text-2xl font-bold text-slate-900">{analysis?.totalIssues.toLocaleString()}</div><p className="text-xs text-slate-500 mt-1">All active non-CRET tickets</p><div className="text-sm text-slate-600 mt-2">Qty: {analysis?.totalQuantity.toLocaleString()}</div></CardContent>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">Total Issues</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-slate-900">{analysis?.totalIssues.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.totalQuantity.toLocaleString()}</div></CardContent>
               </Card>
               <Card className="border-l-4 border-l-emerald-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('FC Receive', analysis.fcReceive.data, 'PendingReason contains fc receive')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500">FC Receive</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-emerald-600">{analysis?.fcReceive.count.toLocaleString()}</div><p className="text-xs text-slate-500 mt-1">Waiting FC Receive action</p><div className="text-sm text-slate-600 mt-2">Qty: {analysis?.fcReceive.quantity.toLocaleString()}</div><div className="text-xs text-red-500 mt-1">{t.overDays(FIXED_THRESHOLD_DAYS)}: {analysis?.fcReceive.ageOverThreshold}</div></CardContent>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">FC Receive</CardTitle></CardHeader><CardContent><div className="text-3xl font-extrabold text-emerald-600">{analysis?.fcReceive.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.fcReceive.quantity.toLocaleString()}</div><div className="text-sm text-red-500 mt-1">{t.overDays(FIXED_THRESHOLD_DAYS)}: {analysis?.fcReceive.ageOverThreshold}</div></CardContent>
               </Card>
               <Card className="border-l-4 border-l-amber-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('FC Actionable', analysis.fcActionable.data, 'PendingReason contains requester information - fc actionable')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500">FC Actionable</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-amber-600">{analysis?.fcActionable.count.toLocaleString()}</div><p className="text-xs text-slate-500 mt-1">Need requester follow-up</p><div className="text-sm text-slate-600 mt-2">Qty: {analysis?.fcActionable.quantity.toLocaleString()}</div><div className="text-xs text-red-500 mt-1">{t.overDays(FIXED_THRESHOLD_DAYS)}: {analysis?.fcActionable.ageOverThreshold}</div></CardContent>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">FC Actionable</CardTitle></CardHeader><CardContent><div className="text-3xl font-extrabold text-amber-600">{analysis?.fcActionable.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.fcActionable.quantity.toLocaleString()}</div><div className="text-sm text-red-500 mt-1">{t.overDays(FIXED_THRESHOLD_DAYS)}: {analysis?.fcActionable.ageOverThreshold}</div></CardContent>
               </Card>
               <Card className="border-l-4 border-l-purple-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('MFI', analysis.mfi.data, 'Item contains FBA Missing from Inbound')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500">MFI</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold text-purple-600">{analysis?.mfi.totalCount.toLocaleString()}</div><p className="text-xs text-slate-500 mt-1">Missing from inbound cases</p><div className="text-xs text-red-500 mt-1">{t.overDays(MFI_THRESHOLD_DAYS)}: {analysis?.mfi.ageOverThreshold}</div><div className="text-xs text-blue-500">WIP: {analysis?.mfi.workInProgress}</div></CardContent>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">MFI</CardTitle></CardHeader><CardContent><div className="text-3xl font-extrabold text-purple-600">{analysis?.mfi.totalCount.toLocaleString()}</div><div className="text-sm text-red-500 mt-1">{t.overDays(MFI_THRESHOLD_DAYS)}: {analysis?.mfi.ageOverThreshold}</div><div className="text-sm text-blue-500">WIP: {analysis?.mfi.workInProgress}</div></CardContent>
               </Card>
               <Card className="border-l-4 border-l-rose-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('Bin Check', analysis.binCheck.allData, 'Andon Cord + Bin Check Request')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500">Bin Check</CardTitle></CardHeader>
-                <CardContent><div className="text-2xl font-bold text-rose-600">{analysis?.binCheck.total.toLocaleString()}</div><p className="text-xs text-slate-500 mt-1">Andon + Bin check requests</p><div className="text-xs text-red-500 mt-1">{t.overDays(FIXED_THRESHOLD_DAYS)}: {analysis?.binCheck.ageOverThreshold}</div><div className="text-xs text-slate-600 mt-1">Andon: {analysis?.binCheck.andonCord} | Bin Req: {analysis?.binCheck.binCheckRequest}</div></CardContent>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">Bin Check</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-rose-600">{analysis?.binCheck.total.toLocaleString()}</div><div className="text-sm text-red-500 mt-1">{t.overDays(FIXED_THRESHOLD_DAYS)}: {analysis?.binCheck.ageOverThreshold}</div><div className="text-sm text-slate-700 mt-1">Andon: {analysis?.binCheck.andonCord} | Bin Req: {analysis?.binCheck.binCheckRequest}</div></CardContent>
               </Card>
             </div>
 
-            <h3 className="text-sm font-semibold mb-3 text-cyan-700 dark:text-cyan-300">Pending With RBS / PSAS</h3>
+            <h3 className="text-xl font-bold mb-4 text-cyan-700 dark:text-cyan-300">Pending With RBS / PSAS</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <Card className="border-l-4 border-l-cyan-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('RBS / PSAS (Total)', analysis.rbsPsasTotal.data, 'All RBS / PSAS rows')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500">RBS / PSAS Total</CardTitle></CardHeader>
-                <CardContent><div className="text-2xl font-bold text-cyan-600">{analysis?.rbsPsasTotal.count.toLocaleString()}</div><p className="text-xs text-slate-500 mt-1">Full pending backlog</p><div className="text-sm text-slate-600 mt-2">Qty: {analysis?.rbsPsasTotal.quantity.toLocaleString()}</div></CardContent>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">RBS / PSAS Total</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-cyan-600">{analysis?.rbsPsasTotal.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.rbsPsasTotal.quantity.toLocaleString()}</div></CardContent>
               </Card>
               <Card className="border-l-4 border-l-sky-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('PSAS', analysis.fulfilledByAmazon.data, 'Type = Fulfilled By Amazon')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500">PSAS</CardTitle></CardHeader>
-                <CardContent><div className="text-2xl font-bold text-sky-600">{analysis?.fulfilledByAmazon.count.toLocaleString()}</div><p className="text-xs text-slate-500 mt-1">Type = Fulfilled By Amazon</p><div className="text-sm text-slate-600 mt-2">Qty: {analysis?.fulfilledByAmazon.quantity.toLocaleString()}</div></CardContent>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">PSAS</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-sky-600">{analysis?.fulfilledByAmazon.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.fulfilledByAmazon.quantity.toLocaleString()}</div></CardContent>
               </Card>
               <Card className="border-l-4 border-l-indigo-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('RBS', analysis.rbsOnly.data, 'RBS / PSAS rows excluding PSAS')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500">RBS</CardTitle></CardHeader>
-                <CardContent><div className="text-2xl font-bold text-indigo-600">{analysis?.rbsOnly.count.toLocaleString()}</div><p className="text-xs text-slate-500 mt-1">RBS rows only</p><div className="text-sm text-slate-600 mt-2">Qty: {analysis?.rbsOnly.quantity.toLocaleString()}</div></CardContent>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">RBS</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-indigo-600">{analysis?.rbsOnly.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.rbsOnly.quantity.toLocaleString()}</div></CardContent>
               </Card>
             </div>
 
-            <h3 className="text-sm font-semibold mb-3 text-slate-700 dark:text-slate-300">CRET & Others</h3>
+            <h3 className="text-xl font-bold mb-4 text-slate-700 dark:text-slate-300">CRET & Others</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className="border-l-4 border-l-gray-600 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('CRET', analysis.cret.data, 'CRET records')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500">CRET</CardTitle></CardHeader>
-                <CardContent><div className="text-2xl font-bold text-gray-700">{analysis?.cret.count.toLocaleString()}</div><div className="text-sm text-slate-600 mt-2">Qty: {analysis?.cret.quantity.toLocaleString()}</div></CardContent>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">CRET</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-gray-700">{analysis?.cret.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.cret.quantity.toLocaleString()}</div></CardContent>
               </Card>
               <Card className="border-l-4 border-l-slate-400 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('Others', analysis.others.data, 'Uncategorized records')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500">Others</CardTitle></CardHeader>
-                <CardContent><div className="text-2xl font-bold text-slate-600">{analysis?.others.count.toLocaleString()}</div><div className="text-sm text-slate-600 mt-2">Qty: {analysis?.others.quantity.toLocaleString()}</div></CardContent>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">Others</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-slate-600">{analysis?.others.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.others.quantity.toLocaleString()}</div></CardContent>
               </Card>
             </div>
           </TabsContent>
@@ -1370,9 +1370,11 @@ export default function App() {
         </Tabs>
       </main>
 
-      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <p className="text-sm text-slate-700 dark:text-slate-300">{t.executionBy}</p>
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80 px-4 py-3">
+            <p className="text-base font-medium text-slate-700 dark:text-slate-200 text-center">{t.executionBy}</p>
+          </div>
         </div>
       </footer>
 
