@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Upload, FileSpreadsheet, X, Download, AlertCircle, Package, Clock,
   Activity, ChevronLeft, Search, ChevronDown, ChevronUp, BarChart3,
-  Filter, FileDown, PieChart, TrendingUp, Moon, Sun, Languages, Settings,
+  Filter, FileDown, PieChart, TrendingUp, Moon, Sun, Languages,
   GitCompareArrows
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,15 +40,11 @@ interface AnalysisResult {
   fcReceive: { count: number; quantity: number; ageOverThreshold: number; data: DataRow[] };
   fcActionable: { count: number; quantity: number; ageOverThreshold: number; data: DataRow[] };
   mfi: { totalCount: number; ageOverThreshold: number; workInProgress: number; data: DataRow[] };
-  pendingRBS_PSAS: { count: number; quantity: number; data: DataRow[] };
-  binCheck: { andonCord: number; binCheckRequest: number; total: number; andonCordData: DataRow[]; binCheckRequestData: DataRow[]; allData: DataRow[] };
+  rbsPsasTotal: { count: number; quantity: number; data: DataRow[] };
+  fulfilledByAmazon: { count: number; quantity: number; data: DataRow[] };
+  rbsOnly: { count: number; quantity: number; data: DataRow[] };
+  binCheck: { andonCord: number; binCheckRequest: number; total: number; ageOverThreshold: number; andonCordData: DataRow[]; binCheckRequestData: DataRow[]; allData: DataRow[] };
   others: { count: number; quantity: number; data: DataRow[] };
-}
-
-interface DashboardSettings {
-  fcReceiveAgeThreshold: number;
-  fcActionableAgeThreshold: number;
-  mfiAgeThreshold: number;
 }
 
 interface ShiftDiffRow {
@@ -76,17 +72,46 @@ const RBS_PSAS_ITEMS = [
 ];
 
 const CHART_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#a855f7', '#06b6d4', '#f43f5e', '#64748b'];
+const PREFS_COOKIE_KEY = 'iss-dashboard-prefs';
+const FIXED_THRESHOLD_DAYS = 7;
+const MFI_THRESHOLD_DAYS = 5;
+
+const readPreferences = () => {
+  const cookieItem = document.cookie
+    .split('; ')
+    .find((part) => part.startsWith(`${PREFS_COOKIE_KEY}=`));
+
+  if (!cookieItem) {
+    return {
+      language: localStorage.getItem('iss-language') === 'ar' ? 'ar' : 'en',
+      darkMode: localStorage.getItem('iss-dark-mode') === '1',
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(decodeURIComponent(cookieItem.split('=')[1]));
+    return {
+      language: parsed.language === 'en' ? 'en' : 'ar',
+      darkMode: parsed.darkMode === true,
+    };
+  } catch {
+    return {
+      language: 'en',
+      darkMode: false,
+    };
+  }
+};
 
 export default function App() {
+  const initialPreferences = useMemo(() => readPreferences(), []);
   const [data, setData] = useState<DataRow[]>([]);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [fileName, setFileName] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [language, setLanguage] = useState<'en' | 'ar'>(() => (localStorage.getItem('iss-language') === 'en' ? 'en' : 'ar'));
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('iss-dark-mode') === '1');
-  const [settings, setSettings] = useState<DashboardSettings>({ fcReceiveAgeThreshold: 10, fcActionableAgeThreshold: 10, mfiAgeThreshold: 5 });
+  const [language, setLanguage] = useState<'en' | 'ar'>(initialPreferences.language);
+  const [darkMode, setDarkMode] = useState(initialPreferences.darkMode);
   const [startShiftData, setStartShiftData] = useState<DataRow[]>([]);
   const [endShiftData, setEndShiftData] = useState<DataRow[]>([]);
   const [shiftDiffRows, setShiftDiffRows] = useState<ShiftDiffRow[]>([]);
@@ -108,6 +133,7 @@ export default function App() {
   const [dialogSearchTerm, setDialogSearchTerm] = useState('');
   const [dialogSortColumn, setDialogSortColumn] = useState('');
   const [dialogSortDirection, setDialogSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [dialogPage, setDialogPage] = useState(1);
 
   const i18n = {
     en: {
@@ -120,10 +146,10 @@ export default function App() {
       startShift: 'Start Shift', endShift: 'End Shift',
       compareNow: 'Compare',
       appTitle: 'ISS Dashboard',
-      uploadStart: 'Upload your CSV or Excel file to get instant insights',
+      uploadStart: 'Upload CSV/Excel and start instantly',
       uploadDrop: 'Drop your file here',
       uploadDrag: 'Drag & drop your file',
-      uploadBrowse: 'or click to browse from your computer',
+      uploadBrowse: 'or click to browse',
       analyzing: 'Analyzing your data...',
       uploadStartFile: 'Upload Start File',
       uploadEndFile: 'Upload End File',
@@ -138,8 +164,8 @@ export default function App() {
       fromType: 'From Type',
       toType: 'To Type',
       noTransitions: 'No type transitions found',
-      executionBy: 'Implemented by Mahmoud Kandeel',
-      supportContact: 'For any inquiry or issue, contact: mahmabdr@amazon.com',
+      executionBy: 'Implemented by Mahmoud Kandeel — mahmabdr@amazon.com',
+      supportContact: '',
       overDays: (days: number) => `>${days} days`
     },
     ar: {
@@ -152,10 +178,10 @@ export default function App() {
       startShift: 'بداية الشيفت', endShift: 'نهاية الشيفت',
       compareNow: 'قارن الآن',
       appTitle: 'ISS Dashboard',
-      uploadStart: 'ارفع ملف CSV أو Excel لعرض التحليل فورًا',
+      uploadStart: 'ارفع CSV/Excel وابدأ فورًا',
       uploadDrop: 'اسحب الملف هنا',
       uploadDrag: 'اسحب الملف وأفلته',
-      uploadBrowse: 'أو اضغط للاختيار من جهازك',
+      uploadBrowse: 'أو اضغط للاختيار',
       analyzing: 'جارٍ تحليل البيانات...',
       uploadStartFile: 'ارفع ملف البداية',
       uploadEndFile: 'ارفع ملف النهاية',
@@ -170,8 +196,8 @@ export default function App() {
       fromType: 'من نوع',
       toType: 'إلى نوع',
       noTransitions: 'لا يوجد تحويلات بين الأنواع',
-      executionBy: 'تنفيذ Mahmoud Kandeel',
-      supportContact: 'لأي استفسار أو مشكلة تواصل مع: mahmabdr@amazon.com',
+      executionBy: 'تنفيذ Mahmoud Kandeel — mahmabdr@amazon.com',
+      supportContact: '',
       overDays: (days: number) => `أكثر من ${days} أيام`
     }
   } as const;
@@ -189,6 +215,11 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('iss-dark-mode', darkMode ? '1' : '0');
   }, [darkMode]);
+
+  useEffect(() => {
+    document.cookie = `${PREFS_COOKIE_KEY}=${encodeURIComponent(JSON.stringify({ language, darkMode }))};path=/;max-age=${60 * 60 * 24 * 365}`;
+  }, [language, darkMode]);
+
 
 
 
@@ -226,8 +257,10 @@ export default function App() {
         fcReceive: { count: 0, quantity: 0, ageOverThreshold: 0, data: [] },
         fcActionable: { count: 0, quantity: 0, ageOverThreshold: 0, data: [] },
         mfi: { totalCount: 0, ageOverThreshold: 0, workInProgress: 0, data: [] },
-        pendingRBS_PSAS: { count: 0, quantity: 0, data: [] },
-        binCheck: { andonCord: 0, binCheckRequest: 0, total: 0, andonCordData: [], binCheckRequestData: [], allData: [] },
+        rbsPsasTotal: { count: 0, quantity: 0, data: [] },
+        fulfilledByAmazon: { count: 0, quantity: 0, data: [] },
+        rbsOnly: { count: 0, quantity: 0, data: [] },
+        binCheck: { andonCord: 0, binCheckRequest: 0, total: 0, ageOverThreshold: 0, andonCordData: [], binCheckRequestData: [], allData: [] },
         others: { count: 0, quantity: 0, data: [] }
       };
     }
@@ -250,7 +283,7 @@ export default function App() {
     const fcReceiveData = nonCretData.filter(r => String(r['PendingReason'] || '').toLowerCase().includes('fc receive'));
     const fcReceiveCount = fcReceiveData.filter(r => r['IssueUrl'] && String(r['IssueUrl']).trim() !== '').length;
     const fcReceiveQuantity = fcReceiveData.reduce((s, r) => s + (Number(r['Quantity']) || 0), 0);
-    const fcReceiveAgeOverThreshold = fcReceiveData.filter(r => Number(r['Age']) > settings.fcReceiveAgeThreshold).length;
+    const fcReceiveAgeOverThreshold = fcReceiveData.filter(r => Number(r['Age']) > FIXED_THRESHOLD_DAYS).length;
 
     const fcActionableData = nonCretData.filter(r => {
       const pr = String(r['PendingReason'] || '').toLowerCase();
@@ -258,11 +291,11 @@ export default function App() {
     });
     const fcActionableCount = fcActionableData.filter(r => r['IssueUrl'] && String(r['IssueUrl']).trim() !== '').length;
     const fcActionableQuantity = fcActionableData.reduce((s, r) => s + (Number(r['Quantity']) || 0), 0);
-    const fcActionableAgeOverThreshold = fcActionableData.filter(r => Number(r['Age']) > settings.fcActionableAgeThreshold).length;
+    const fcActionableAgeOverThreshold = fcActionableData.filter(r => Number(r['Age']) > FIXED_THRESHOLD_DAYS).length;
 
     const mfiData = nonCretData.filter(r => String(r['Item'] || '').toLowerCase().includes('fba missing from inbound'));
     const mfiTotalCount = mfiData.filter(r => r['IssueUrl'] && String(r['IssueUrl']).trim() !== '').length;
-    const mfiAgeOverThreshold = mfiData.filter(r => Number(r['Age']) > settings.mfiAgeThreshold).length;
+    const mfiAgeOverThreshold = mfiData.filter(r => Number(r['Age']) > MFI_THRESHOLD_DAYS).length;
     const mfiWorkInProgress = mfiData.filter(r => String(r['Status'] || '').toLowerCase() === 'work in progress').length;
 
     const itemRbsMask = (r: DataRow) => {
@@ -274,8 +307,14 @@ export default function App() {
       return !(pr.includes('fc receive') || (pr.includes('requester information') && pr.includes('fc actionable')));
     };
     const pendingRBSData = nonCretData.filter(r => itemRbsMask(r) && excludeFcMask(r));
+    const fulfilledByAmazonData = pendingRBSData.filter((r) => String(r['Type'] || '').trim().toLowerCase() === 'fulfilled by amazon');
+    const rbsOnlyData = pendingRBSData.filter((r) => String(r['Type'] || '').trim().toLowerCase() !== 'fulfilled by amazon');
     const pendingRBSCount = pendingRBSData.filter(r => r['IssueUrl'] && String(r['IssueUrl']).trim() !== '').length;
     const pendingRBSQuantity = pendingRBSData.reduce((s, r) => s + (Number(r['Quantity']) || 0), 0);
+    const fbaCount = fulfilledByAmazonData.filter(r => r['IssueUrl'] && String(r['IssueUrl']).trim() !== '').length;
+    const fbaQuantity = fulfilledByAmazonData.reduce((s, r) => s + (Number(r['Quantity']) || 0), 0);
+    const rbsOnlyCount = rbsOnlyData.filter(r => r['IssueUrl'] && String(r['IssueUrl']).trim() !== '').length;
+    const rbsOnlyQuantity = rbsOnlyData.reduce((s, r) => s + (Number(r['Quantity']) || 0), 0);
 
     const andonCordData = nonCretData.filter(r => String(r['Title'] || '').toLowerCase().includes('andon cord'));
     const binCheckRequestData = nonCretData.filter(r => String(r['Title'] || '').toLowerCase().includes('bin check request on'));
@@ -301,11 +340,13 @@ export default function App() {
       fcReceive: { count: fcReceiveCount, quantity: fcReceiveQuantity, ageOverThreshold: fcReceiveAgeOverThreshold, data: fcReceiveData },
       fcActionable: { count: fcActionableCount, quantity: fcActionableQuantity, ageOverThreshold: fcActionableAgeOverThreshold, data: fcActionableData },
       mfi: { totalCount: mfiTotalCount, ageOverThreshold: mfiAgeOverThreshold, workInProgress: mfiWorkInProgress, data: mfiData },
-      pendingRBS_PSAS: { count: pendingRBSCount, quantity: pendingRBSQuantity, data: pendingRBSData },
-      binCheck: { andonCord: andonCordCount, binCheckRequest: binCheckRequestCount, total: andonCordCount + binCheckRequestCount, andonCordData, binCheckRequestData, allData: [...andonCordData, ...binCheckRequestData] },
+      rbsPsasTotal: { count: pendingRBSCount, quantity: pendingRBSQuantity, data: pendingRBSData },
+      fulfilledByAmazon: { count: fbaCount, quantity: fbaQuantity, data: fulfilledByAmazonData },
+      rbsOnly: { count: rbsOnlyCount, quantity: rbsOnlyQuantity, data: rbsOnlyData },
+      binCheck: { andonCord: andonCordCount, binCheckRequest: binCheckRequestCount, total: andonCordCount + binCheckRequestCount, ageOverThreshold: [...andonCordData, ...binCheckRequestData].filter(r => Number(r['Age']) > FIXED_THRESHOLD_DAYS).length, andonCordData, binCheckRequestData, allData: [...andonCordData, ...binCheckRequestData] },
       others: { count: othersCount, quantity: othersQuantity, data: othersData }
     };
-  }, [settings]);
+  }, []);
 
   const parseFile = useCallback((file: File) => {
     setIsLoading(true);
@@ -605,6 +646,38 @@ export default function App() {
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [shiftDiffRows]);
 
+  const shiftOverview = useMemo(() => {
+    const categories = ['Bin Check', 'FC Receive', 'FC Actionable', 'MFI', 'RBS / PSAS', 'CRET', 'Others'];
+    const startCounts: Record<string, number> = {};
+    const endCounts: Record<string, number> = {};
+    categories.forEach((c) => {
+      startCounts[c] = 0;
+      endCounts[c] = 0;
+    });
+
+    startShiftData.forEach((row) => {
+      const cat = getRowCategory(row);
+      startCounts[cat] = (startCounts[cat] || 0) + 1;
+    });
+    endShiftData.forEach((row) => {
+      const cat = getRowCategory(row);
+      endCounts[cat] = (endCounts[cat] || 0) + 1;
+    });
+
+    return categories.map((cat) => {
+      const opened = shiftDiffRows.filter((r) => r.changeType === 'added' && r.endIssueType === cat).length;
+      const closed = shiftDiffRows.filter((r) => r.changeType === 'removed' && r.startIssueType === cat).length;
+      return {
+        category: cat,
+        start: startCounts[cat] || 0,
+        end: endCounts[cat] || 0,
+        opened,
+        closed,
+        net: (endCounts[cat] || 0) - (startCounts[cat] || 0),
+      };
+    });
+  }, [shiftDiffRows, startShiftData, endShiftData, getRowCategory]);
+
   // Chart data
   const chartData = useMemo(() => {
     if (!analysis) return { category: [], pie: [], ageDist: [], statusDist: [] };
@@ -613,7 +686,7 @@ export default function App() {
       { name: 'FC Receive', issues: analysis.fcReceive.count, quantity: analysis.fcReceive.quantity },
       { name: 'FC Actionable', issues: analysis.fcActionable.count, quantity: analysis.fcActionable.quantity },
       { name: 'MFI', issues: analysis.mfi.totalCount, quantity: 0 },
-      { name: 'RBS/PSAS', issues: analysis.pendingRBS_PSAS.count, quantity: analysis.pendingRBS_PSAS.quantity },
+      { name: 'RBS/PSAS', issues: analysis.rbsPsasTotal.count, quantity: analysis.rbsPsasTotal.quantity },
       { name: 'Bin Check', issues: analysis.binCheck.total, quantity: 0 },
       { name: 'Others', issues: analysis.others.count, quantity: analysis.others.quantity },
     ];
@@ -649,6 +722,7 @@ export default function App() {
     setSelectedDataset({ name, data: dataRows, description });
     setDialogSearchTerm('');
     setDialogSortColumn('');
+    setDialogPage(1);
   };
 
   const exportDatasetToExcel = () => {
@@ -681,7 +755,7 @@ export default function App() {
       ['FC Receive', String(analysis.fcReceive.count), String(analysis.fcReceive.quantity)],
       ['FC Actionable', String(analysis.fcActionable.count), String(analysis.fcActionable.quantity)],
       ['MFI', String(analysis.mfi.totalCount), '-'],
-      ['RBS / PSAS', String(analysis.pendingRBS_PSAS.count), String(analysis.pendingRBS_PSAS.quantity)],
+      ['RBS / PSAS', String(analysis.rbsPsasTotal.count), String(analysis.rbsPsasTotal.quantity)],
       ['Bin Check', String(analysis.binCheck.total), '-'],
       ['Others', String(analysis.others.count), String(analysis.others.quantity)],
     ];
@@ -731,7 +805,7 @@ export default function App() {
     doc.save(`${selectedDataset.name.replace(/\s+/g, '_')}.pdf`);
   };
 
-  const getDialogFilteredData = () => {
+  const dialogFilteredData = useMemo(() => {
     if (!selectedDataset) return [];
     let result = [...selectedDataset.data];
     if (dialogSearchTerm) {
@@ -750,7 +824,18 @@ export default function App() {
       });
     }
     return result;
-  };
+  }, [selectedDataset, dialogSearchTerm, dialogSortColumn, dialogSortDirection]);
+
+  const DIALOG_PAGE_SIZE = 50;
+  const dialogTotalPages = Math.max(1, Math.ceil(dialogFilteredData.length / DIALOG_PAGE_SIZE));
+  const dialogPagedData = useMemo(() => {
+    const start = (dialogPage - 1) * DIALOG_PAGE_SIZE;
+    return dialogFilteredData.slice(start, start + DIALOG_PAGE_SIZE);
+  }, [dialogFilteredData, dialogPage]);
+
+  useEffect(() => {
+    setDialogPage(1);
+  }, [dialogSearchTerm, dialogSortColumn, dialogSortDirection]);
 
   const handleDialogSort = (col: string) => {
     if (dialogSortColumn === col) setDialogSortDirection(d => d === 'asc' ? 'desc' : 'asc');
@@ -762,7 +847,7 @@ export default function App() {
   // Upload screen
   if (data.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#e0f2fe,_#f8fafc_55%)] dark:bg-[radial-gradient(circle_at_top,_#0f172a,_#020617_55%)] flex items-center justify-center p-4">
         <div className="w-full max-w-2xl">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600 rounded-2xl mb-6 shadow-lg shadow-blue-200">
@@ -775,7 +860,7 @@ export default function App() {
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
-            className={`relative border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 ${isDragging ? 'border-blue-500 bg-blue-50 shadow-lg shadow-blue-100' : 'border-slate-300 bg-white dark:bg-slate-900 dark:border-slate-700 hover:border-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+            className={`relative border-2 border-dashed rounded-3xl p-12 text-center transition-all duration-300 ${isDragging ? 'border-cyan-500 bg-cyan-50 shadow-2xl shadow-cyan-100 scale-[1.01]' : 'border-slate-300 bg-white/90 dark:bg-slate-900/80 dark:border-slate-700 hover:border-cyan-400 hover:bg-white dark:hover:bg-slate-800 shadow-xl shadow-slate-200/60 dark:shadow-black/20'}`}
           >
             <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileInput} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
             <div className="flex flex-col items-center">
@@ -802,9 +887,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#dbeafe,_#f8fafc_45%,_#eef2ff)] dark:bg-[radial-gradient(circle_at_top,_#0f172a,_#020617_50%,_#111827)]" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       {/* Header */}
-      <header className="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
+      <header className="bg-white/85 dark:bg-slate-950/85 backdrop-blur border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
@@ -847,7 +932,7 @@ export default function App() {
       {/* Main Content */}
       <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 shadow-sm">
             <TabsTrigger value="dashboard" className="gap-2"><Activity className="w-4 h-4" /> {t.dashboard}</TabsTrigger>
             <TabsTrigger value="charts" className="gap-2"><BarChart3 className="w-4 h-4" /> {t.charts}</TabsTrigger>
             <TabsTrigger value="explorer" className="gap-2"><Search className="w-4 h-4" /> {t.explorer}</TabsTrigger>
@@ -856,146 +941,76 @@ export default function App() {
 
           {/* DASHBOARD TAB */}
           <TabsContent value="dashboard">
-            <Card className="mb-4">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2"><Settings className="w-4 h-4" /> {t.settings}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-xs text-slate-500 mb-1 block">FC Receive {t.ageThreshold}</label>
-                    <Input type="number" value={settings.fcReceiveAgeThreshold} onChange={e => setSettings(prev => ({ ...prev, fcReceiveAgeThreshold: Number(e.target.value) || 0 }))} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-500 mb-1 block">FC Actionable {t.ageThreshold}</label>
-                    <Input type="number" value={settings.fcActionableAgeThreshold} onChange={e => setSettings(prev => ({ ...prev, fcActionableAgeThreshold: Number(e.target.value) || 0 }))} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-500 mb-1 block">MFI {t.ageThreshold}</label>
-                    <Input type="number" value={settings.mfiAgeThreshold} onChange={e => setSettings(prev => ({ ...prev, mfiAgeThreshold: Number(e.target.value) || 0 }))} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
-              {/* CRET */}
-              <Card className="border-l-4 border-l-gray-600 cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => analysis && openDataset('CRET', analysis.cret.data, 'Records with cret in Title, C-Return/Customer Return in Item, or tsCret in PhysicalLocation')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2"><AlertCircle className="w-4 h-4 text-gray-600" />CRET</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-gray-700">{analysis?.cret.count.toLocaleString()}</div>
-                  <div className="flex items-center gap-2 mt-2"><Package className="w-4 h-4 text-slate-400" /><span className="text-sm text-slate-600">Qty: {analysis?.cret.quantity.toLocaleString()}</span></div>
-                </CardContent>
+            <h3 className="text-xl font-bold mb-4 text-emerald-700 dark:text-emerald-300">ISS Overview</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+              <Card className="border-l-4 border-l-blue-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => { const nonCret = data.filter(row => { const t = String(row['Title'] || '').toLowerCase(); const i = String(row['Item'] || '').toLowerCase(); const l = String(row['PhysicalLocation'] || '').toLowerCase(); return !(t.includes('cret') || i.includes('c-return') || i.includes('customer return') || l.includes('tscret'));}); openDataset('Total Issues (Non-CRET)', nonCret, 'All non-CRET issues'); }}>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">Total Issues</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-slate-900">{analysis?.totalIssues.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.totalQuantity.toLocaleString()}</div></CardContent>
               </Card>
-
-              {/* Total Issues */}
-              <Card className="border-l-4 border-l-blue-500 cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => {
-                  const nonCret = data.filter(row => {
-                    const t = String(row['Title'] || '').toLowerCase(); const i = String(row['Item'] || '').toLowerCase(); const l = String(row['PhysicalLocation'] || '').toLowerCase();
-                    return !(t.includes('cret') || i.includes('c-return') || i.includes('customer return') || l.includes('tscret'));
-                  });
-                  openDataset('Total Issues (Non-CRET)', nonCret, 'All non-CRET issues');
-                }}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2"><AlertCircle className="w-4 h-4" />Total Issues</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-slate-900">{analysis?.totalIssues.toLocaleString()}</div>
-                  <div className="flex items-center gap-2 mt-2"><Package className="w-4 h-4 text-slate-400" /><span className="text-sm text-slate-600">Qty: {analysis?.totalQuantity.toLocaleString()}</span></div>
-                </CardContent>
+              <Card className="border-l-4 border-l-emerald-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('FC Receive', analysis.fcReceive.data, 'PendingReason contains fc receive')}>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">FC Receive</CardTitle></CardHeader><CardContent><div className="text-3xl font-extrabold text-emerald-600">{analysis?.fcReceive.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.fcReceive.quantity.toLocaleString()}</div><div className="text-sm text-red-500 mt-1">{t.overDays(FIXED_THRESHOLD_DAYS)}: {analysis?.fcReceive.ageOverThreshold}</div></CardContent>
               </Card>
-
-              {/* FC Receive */}
-              <Card className="border-l-4 border-l-emerald-500 cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => analysis && openDataset('FC Receive', analysis.fcReceive.data, 'PendingReason contains "fc receive"')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2"><AlertCircle className="w-4 h-4 text-emerald-500" />FC Receive</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-emerald-600">{analysis?.fcReceive.count.toLocaleString()}</div>
-                  <div className="flex items-center gap-2 mt-2"><Package className="w-4 h-4 text-slate-400" /><span className="text-sm text-slate-600">Qty: {analysis?.fcReceive.quantity.toLocaleString()}</span></div>
-                  <div className="flex items-center gap-1 mt-1 text-xs text-red-500"><Clock className="w-3 h-3" />{t.overDays(settings.fcReceiveAgeThreshold)}: {analysis?.fcReceive.ageOverThreshold}</div>
-                </CardContent>
+              <Card className="border-l-4 border-l-amber-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('FC Actionable', analysis.fcActionable.data, 'PendingReason contains requester information - fc actionable')}>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">FC Actionable</CardTitle></CardHeader><CardContent><div className="text-3xl font-extrabold text-amber-600">{analysis?.fcActionable.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.fcActionable.quantity.toLocaleString()}</div><div className="text-sm text-red-500 mt-1">{t.overDays(FIXED_THRESHOLD_DAYS)}: {analysis?.fcActionable.ageOverThreshold}</div></CardContent>
               </Card>
-
-              {/* FC Actionable */}
-              <Card className="border-l-4 border-l-amber-500 cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => analysis && openDataset('FC Actionable', analysis.fcActionable.data, 'PendingReason contains "requester information - fc actionable"')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2"><AlertCircle className="w-4 h-4 text-amber-500" />FC Actionable</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-amber-600">{analysis?.fcActionable.count.toLocaleString()}</div>
-                  <div className="flex items-center gap-2 mt-2"><Package className="w-4 h-4 text-slate-400" /><span className="text-sm text-slate-600">Qty: {analysis?.fcActionable.quantity.toLocaleString()}</span></div>
-                  <div className="flex items-center gap-1 mt-1 text-xs text-red-500"><Clock className="w-3 h-3" />{t.overDays(settings.fcActionableAgeThreshold)}: {analysis?.fcActionable.ageOverThreshold}</div>
-                </CardContent>
+              <Card className="border-l-4 border-l-purple-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('MFI', analysis.mfi.data, 'Item contains FBA Missing from Inbound')}>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">MFI</CardTitle></CardHeader><CardContent><div className="text-3xl font-extrabold text-purple-600">{analysis?.mfi.totalCount.toLocaleString()}</div><div className="text-sm text-red-500 mt-1">{t.overDays(MFI_THRESHOLD_DAYS)}: {analysis?.mfi.ageOverThreshold}</div><div className="text-sm text-blue-500">WIP: {analysis?.mfi.workInProgress}</div></CardContent>
               </Card>
-
-              {/* MFI */}
-              <Card className="border-l-4 border-l-purple-500 cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => analysis && openDataset('MFI', analysis.mfi.data, 'Item contains "FBA Missing from Inbound"')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2"><AlertCircle className="w-4 h-4 text-purple-500" />MFI</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-purple-600">{analysis?.mfi.totalCount.toLocaleString()}</div>
-                  <div className="flex flex-col gap-1 mt-2 text-xs">
-                    <span className="flex items-center gap-1 text-red-500"><Clock className="w-3 h-3" />{t.overDays(settings.mfiAgeThreshold)}: {analysis?.mfi.ageOverThreshold}</span>
-                    <span className="flex items-center gap-1 text-blue-500"><Activity className="w-3 h-3" />WIP: {analysis?.mfi.workInProgress}</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* RBS / PSAS */}
-              <Card className="border-l-4 border-l-cyan-500 cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => analysis && openDataset('RBS / PSAS', analysis.pendingRBS_PSAS.data, 'Pending with RBS / PSAS items')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2"><AlertCircle className="w-4 h-4 text-cyan-500" />RBS / PSAS</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-cyan-600">{analysis?.pendingRBS_PSAS.count.toLocaleString()}</div>
-                  <div className="flex items-center gap-2 mt-2"><Package className="w-4 h-4 text-slate-400" /><span className="text-sm text-slate-600">Qty: {analysis?.pendingRBS_PSAS.quantity.toLocaleString()}</span></div>
-                </CardContent>
-              </Card>
-
-              {/* Bin Check */}
-              <Card className="border-l-4 border-l-rose-500 cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => analysis && openDataset('Bin Check', analysis.binCheck.allData, 'Andon Cord + Bin Check Request')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2"><AlertCircle className="w-4 h-4 text-rose-500" />Bin Check</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-rose-600">{analysis?.binCheck.total.toLocaleString()}</div>
-                  <div className="flex flex-col gap-1 mt-2 text-xs">
-                    <span className="text-slate-600">Andon: {analysis?.binCheck.andonCord}</span>
-                    <span className="text-slate-600">Bin Req: {analysis?.binCheck.binCheckRequest}</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Others */}
-              <Card className="border-l-4 border-l-slate-400 cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => analysis && openDataset('Others', analysis.others.data, 'Uncategorized records')}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-slate-500 flex items-center gap-2"><AlertCircle className="w-4 h-4 text-slate-400" />Others</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-slate-600">{analysis?.others.count.toLocaleString()}</div>
-                  <div className="flex items-center gap-2 mt-2"><Package className="w-4 h-4 text-slate-400" /><span className="text-sm text-slate-600">Qty: {analysis?.others.quantity.toLocaleString()}</span></div>
-                </CardContent>
+              <Card className="border-l-4 border-l-rose-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('Bin Check', analysis.binCheck.allData, 'Andon Cord + Bin Check Request')}>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">Bin Check</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-rose-600">{analysis?.binCheck.total.toLocaleString()}</div><div className="text-sm text-red-500 mt-1">{t.overDays(FIXED_THRESHOLD_DAYS)}: {analysis?.binCheck.ageOverThreshold}</div><div className="text-sm text-slate-700 mt-1">Andon: {analysis?.binCheck.andonCord} | Bin Req: {analysis?.binCheck.binCheckRequest}</div></CardContent>
               </Card>
             </div>
 
-            {/* Quick summary bar chart below cards */}
-            <Card className="mt-6">
-              <CardHeader><CardTitle className="text-base flex items-center gap-2"><TrendingUp className="w-5 h-5 text-blue-600" />Issues by Category</CardTitle></CardHeader>
-              <CardContent>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData.category}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                      <YAxis />
-                      <RTooltip />
-                      <Bar dataKey="issues" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
+            <h3 className="text-xl font-bold mb-4 text-cyan-700 dark:text-cyan-300">Pending With RBS / PSAS</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <Card className="border-l-4 border-l-cyan-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('RBS / PSAS (Total)', analysis.rbsPsasTotal.data, 'All RBS / PSAS rows')}>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">RBS / PSAS Total</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-cyan-600">{analysis?.rbsPsasTotal.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.rbsPsasTotal.quantity.toLocaleString()}</div></CardContent>
+              </Card>
+              <Card className="border-l-4 border-l-sky-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('PSAS', analysis.fulfilledByAmazon.data, 'Type = Fulfilled By Amazon')}>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">PSAS</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-sky-600">{analysis?.fulfilledByAmazon.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.fulfilledByAmazon.quantity.toLocaleString()}</div></CardContent>
+              </Card>
+              <Card className="border-l-4 border-l-indigo-500 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('RBS', analysis.rbsOnly.data, 'RBS / PSAS rows excluding PSAS')}>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">RBS</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-indigo-600">{analysis?.rbsOnly.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.rbsOnly.quantity.toLocaleString()}</div></CardContent>
+              </Card>
+            </div>
+
+            <h3 className="text-xl font-bold mb-4 text-slate-700 dark:text-slate-300">CRET & Others</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card className="border-l-4 border-l-gray-600 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('CRET', analysis.cret.data, 'CRET records')}>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">CRET</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-gray-700">{analysis?.cret.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.cret.quantity.toLocaleString()}</div></CardContent>
+              </Card>
+              <Card className="border-l-4 border-l-slate-400 bg-white/95 dark:bg-slate-900/95 cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all" onClick={() => analysis && openDataset('Others', analysis.others.data, 'Uncategorized records')}>
+                <CardHeader className="pb-2"><CardTitle className="text-base text-slate-600">Others</CardTitle></CardHeader>
+                <CardContent><div className="text-3xl font-extrabold text-slate-600">{analysis?.others.count.toLocaleString()}</div><div className="text-base text-slate-700 mt-2">Qty: {analysis?.others.quantity.toLocaleString()}</div></CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* CHARTS TAB */}
           <TabsContent value="charts">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="lg:col-span-2">
+                <CardHeader><CardTitle className="text-base flex items-center gap-2"><TrendingUp className="w-5 h-5 text-blue-600" />Issues by Category</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData.category}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                        <YAxis />
+                        <RTooltip />
+                        <Bar dataKey="issues" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Pie Chart */}
               <Card>
                 <CardHeader><CardTitle className="text-base flex items-center gap-2"><PieChart className="w-5 h-5 text-purple-600" />Issues Distribution</CardTitle></CardHeader>
@@ -1229,6 +1244,36 @@ export default function App() {
 
                 {shiftDiffRows.length > 0 && (
                   <>
+                    <div className="rounded-lg border p-3 bg-white dark:bg-slate-900">
+                      <p className="text-sm font-semibold mb-2">Shift Snapshot (Opened vs Closed)</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-slate-50 dark:bg-slate-800">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs">Category</th>
+                              <th className="px-3 py-2 text-left text-xs">Start</th>
+                              <th className="px-3 py-2 text-left text-xs">End</th>
+                              <th className="px-3 py-2 text-left text-xs text-emerald-600">Opened</th>
+                              <th className="px-3 py-2 text-left text-xs text-rose-600">Closed</th>
+                              <th className="px-3 py-2 text-left text-xs">Net</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {shiftOverview.map((row) => (
+                              <tr key={row.category} className="border-b dark:border-slate-800">
+                                <td className="px-3 py-1.5 text-xs font-medium">{row.category}</td>
+                                <td className="px-3 py-1.5 text-xs">{row.start}</td>
+                                <td className="px-3 py-1.5 text-xs">{row.end}</td>
+                                <td className="px-3 py-1.5 text-xs text-emerald-600">{row.opened}</td>
+                                <td className="px-3 py-1.5 text-xs text-rose-600">{row.closed}</td>
+                                <td className={`px-3 py-1.5 text-xs ${row.net > 0 ? 'text-emerald-600' : row.net < 0 ? 'text-rose-600' : ''}`}>{row.net}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
                       <Badge variant="secondary">{t.added}: {shiftDiffRows.filter(r => r.changeType === 'added').length}</Badge>
                       <Badge variant="secondary">{t.removed}: {shiftDiffRows.filter(r => r.changeType === 'removed').length}</Badge>
@@ -1325,10 +1370,11 @@ export default function App() {
         </Tabs>
       </main>
 
-      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <p className="text-sm text-slate-700 dark:text-slate-300">{t.executionBy}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t.supportContact}</p>
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80 px-4 py-3">
+            <p className="text-base font-medium text-slate-700 dark:text-slate-200 text-center">{t.executionBy}</p>
+          </div>
         </div>
       </footer>
 
@@ -1354,7 +1400,7 @@ export default function App() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input placeholder="Search..." value={dialogSearchTerm} onChange={e => setDialogSearchTerm(e.target.value)} className="pl-9 bg-white dark:bg-slate-900" />
             </div>
-            <Badge variant="secondary" className="h-10 px-3">{getDialogFilteredData().length} rows</Badge>
+            <Badge variant="secondary" className="h-10 px-3">{dialogFilteredData.length} rows</Badge>
           </div>
 
           <ScrollArea className="flex-1 border border-slate-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900">
@@ -1373,7 +1419,7 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {getDialogFilteredData().map((row, idx) => (
+                  {dialogPagedData.map((row, idx) => (
                     <tr key={idx} className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                       {columns.map(col => (
                         <td key={col} className="px-4 py-2 border-b border-slate-100 dark:border-slate-800 whitespace-nowrap max-w-xs overflow-hidden text-ellipsis text-slate-800 dark:text-slate-100">
@@ -1386,6 +1432,15 @@ export default function App() {
               </table>
             </div>
           </ScrollArea>
+
+          <div className="flex items-center justify-between gap-2 pt-3">
+            <p className="text-xs text-slate-500">Showing {(dialogPage - 1) * DIALOG_PAGE_SIZE + 1}-{Math.min(dialogPage * DIALOG_PAGE_SIZE, dialogFilteredData.length)} of {dialogFilteredData.length}</p>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled={dialogPage <= 1} onClick={() => setDialogPage((p) => Math.max(1, p - 1))}>Previous</Button>
+              <Badge variant="secondary">{dialogPage} / {dialogTotalPages}</Badge>
+              <Button variant="outline" size="sm" disabled={dialogPage >= dialogTotalPages} onClick={() => setDialogPage((p) => Math.min(dialogTotalPages, p + 1))}>Next</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
